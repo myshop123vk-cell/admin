@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ऑर्डर विवरण - TrustKart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 min-h-screen p-4 flex justify-center items-center font-sans text-slate-800">
+
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200 space-y-4 p-6" id="orderApp">
+        <div class="text-center py-8 text-slate-400 font-bold" id="loadingState">
+            <i class="fas fa-spinner fa-spin text-2xl text-orange-500 mb-2"></i>
+            <p>ऑर्डर विवरण लोड हो रहा है...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const configOrder = {
+            apiKey: "AIzaSyBMzI3cibGBwE0T85LRN8xcgQdG2EWUz0Q",
+            authDomain: "trustkart-order.firebaseapp.com",
+            projectId: "trustkart-order",
+            storageBucket: "trustkart-order.firebasestorage.app",
+            messagingSenderId: "332698197358",
+            appId: "1:332698197358:web:8d14e2b0c850138187b57f"
+        };
+
+        const appOrder = initializeApp(configOrder, "orderViewerApp");
+        const dbOrder = getFirestore(appOrder);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId = urlParams.get('id');
+
+        const container = document.getElementById('orderApp');
+
+        if (!orderId) {
+            container.innerHTML = `<div class="text-center text-rose-500 font-bold py-8">अमान्य लिंक! कोई ऑर्डर ID प्रदान नहीं की गई।</div>`;
+        } else {
+            onSnapshot(doc(dbOrder, "orders", orderId), (docSnap) => {
+                if (!docSnap.exists()) {
+                    container.innerHTML = `<div class="text-center text-rose-500 font-bold py-8">क्षमा करें, यह ऑर्डर नहीं मिला।</div>`;
+                    return;
+                }
+
+                const o = docSnap.data();
+                const status = o.status || 'Pending';
+                
+                let itemsHtml = "";
+                if (o.items && Array.isArray(o.items)) {
+                    o.items.forEach(i => {
+                        itemsHtml += `
+                        <div class="flex justify-between text-xs bg-slate-50 p-2.5 rounded-xl border border-dashed mb-1.5">
+                            <span class="font-bold text-slate-700">📦 ${i.n}</span>
+                            <span class="text-slate-500">मात्रा: <b>${i.q}</b> × ₹${i.p}</span>
+                        </div>`;
+                    });
+                } else if (o.itemsText) {
+                    itemsHtml = `<div class="p-3 bg-slate-50 rounded-xl text-xs text-slate-700 whitespace-pre-wrap border">${o.itemsText}</div>`;
+                }
+
+                let statusBadge = "bg-orange-100 text-orange-700";
+                if(status === 'Packed') statusBadge = "bg-blue-100 text-blue-700";
+                if(status === 'Out for Delivery') statusBadge = "bg-purple-100 text-purple-700";
+                if(status === 'Delivered') statusBadge = "bg-emerald-100 text-emerald-700";
+                if(status === 'Cancelled') statusBadge = "bg-rose-100 text-rose-700";
+
+                let orderDateTime = "N/A";
+                if (o.timestamp && typeof o.timestamp.toDate === 'function') {
+                    const dt = o.timestamp.toDate();
+                    orderDateTime = dt.toLocaleDateString('hi-IN') + " | " + dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                }
+
+                let name = o.name || o.customerName || 'N/A';
+                let phone = o.phone || 'N/A';
+                let village = o.village || '';
+                let address = o.address || '';
+                let mapUrl = o.location || o.liveLocation || '';
+
+                container.innerHTML = `
+                    <div class="text-center border-b pb-4">
+                        <span class="text-xs font-black text-orange-500 tracking-wider uppercase">TrustKart Delivery Service</span>
+                        <h1 class="text-xl font-black text-slate-800 mt-1">ऑर्डर रसीद विवरण</h1>
+                        <p class="text-[11px] text-slate-400 mt-0.5"><i class="far fa-clock"></i> ${orderDateTime}</p>
+                    </div>
+
+                    <div class="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border">
+                        <span class="text-xs font-bold text-slate-500">ऑर्डर स्थिति:</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-black ${statusBadge}">${status}</span>
+                    </div>
+
+                    <div class="space-y-1">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide">ग्राहक जानकारी:</h3>
+                        <div class="bg-slate-50 p-3 rounded-2xl border space-y-1 text-xs text-slate-700">
+                            <p><b>नाम:</b> ${name}</p>
+                            <p><b>फोन:</b> <a href="tel:${phone}" class="text-blue-600 underline font-bold">${phone}</a></p>
+                            <p><b>पता:</b> ${village} ${address}</p>
+                            ${mapUrl && mapUrl !== 'Not Shared' && mapUrl !== 'नहीं है' ? `<p class="pt-1"><a href="${mapUrl}" target="_blank" class="text-rose-500 font-bold hover:underline"><i class="fas fa-map-marker-alt"></i> गूगल लाइव मैप देखें</a></p>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide">सामान की सूची:</h3>
+                        ${itemsHtml}
+                    </div>
+
+                    <div class="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex justify-between items-center">
+                        <span class="font-extrabold text-orange-800 text-sm">कुल भुगतान (Total Amount):</span>
+                        <span class="font-black text-orange-600 text-lg">${o.total || '₹0'}</span>
+                    </div>
+
+                    <div class="text-center pt-2">
+                        <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white w-full py-3 rounded-2xl font-bold text-xs shadow-md transition">
+                            <i class="fas fa-print mr-2"></i> रसीद प्रिंट करें
+                        </button>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
